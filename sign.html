@@ -40,16 +40,17 @@ function draw() {
   g.fillStyle = '#e8590c'; g.font = '700 46px Silkscreen'; g.textAlign = 'left'; g.fillText('BOX IT!', 1960, 880); g.textAlign = 'center';
   for (let k = 0; k < 9; k++) { g.fillStyle = '#18211d'; g.fillRect(1530 + k * 42, 830 + (k % 2) * 22, 22, 46); }
   // the QR code
-  const qr = qrcode(0, 'M'); qr.addData(URL_); qr.make(); const n = qr.getModuleCount(), size = 1360, cell = Math.floor(size / (n + 8)), qs = cell * (n + 8), qx = (W - qs) / 2, qy = 1010;
+  const qr = qrcode(0, 'M'); qr.addData(URL_); qr.make(); const n = qr.getModuleCount(), size = 1290, cell = Math.floor(size / (n + 8)), qs = cell * (n + 8), qx = (W - qs) / 2, qy = 1010;
   g.fillStyle = '#ffffff'; g.fillRect(qx, qy, qs, qs); g.strokeStyle = '#18211d'; g.lineWidth = 8; g.strokeRect(qx, qy, qs, qs);
   g.fillStyle = '#18211d'; for (let r = 0; r < n; r++) for (let col = 0; col < n; col++) if (qr.isDark(r, col)) g.fillRect(qx + (col + 4) * cell, qy + (r + 4) * cell, cell, cell);
   const below = qy + qs;
   g.font = '700 92px "Atkinson Hyperlegible", sans-serif'; g.fillStyle = '#18211d'; g.fillText('Scan, then drag a box around each syllable.', W / 2, below + 150);
   g.font = '400 70px "Atkinson Hyperlegible", sans-serif'; g.fillStyle = '#3a4a42'; g.fillText('2 minutes  ·  phones welcome  ·  see how close you get', W / 2, below + 260);
   g.font = '700 62px "Atkinson Hyperlegible", sans-serif'; g.fillStyle = '#1c7ed6'; g.fillText('songbird-soundscape.github.io/syllable-studio', W / 2, below + 370);
-  g.fillStyle = '#e6efe3'; g.fillRect(170, below + 450, W - 340, 360); g.fillStyle = '#2b8a3e'; g.fillRect(170, below + 450, 22, 360);
+  g.fillStyle = '#e6efe3'; g.fillRect(170, below + 450, W - 340, 430); g.fillStyle = '#2b8a3e'; g.fillRect(170, below + 450, 22, 430);
   g.textAlign = 'left'; g.fillStyle = '#18211d'; g.font = '700 70px Silkscreen'; g.fillText('STAY ON CONTOUR!', 250, below + 560);
   g.font = '400 60px "Atkinson Hyperlegible", sans-serif'; g.fillText('Updates on sound-processing jobs, and a circle of', 250, below + 660); g.fillText('field ecologists young and seasoned, sharing what they know.', 250, below + 740);
+  g.font = '700 46px "Atkinson Hyperlegible", sans-serif'; g.fillStyle = '#2b8a3e'; g.fillText('Brainstorm · collaborate · co-author · share data · borrow audio gear', 250, below + 830);
   g.textAlign = 'center';
 }
 document.fonts.ready.then(draw); draw();

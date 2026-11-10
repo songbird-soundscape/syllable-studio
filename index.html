@@ -48,6 +48,8 @@ th { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var
 tr.sel td { background: var(--chip); }
 .labels button { font-weight: 400; padding: 6px 10px; }
 .join { border-left: 5px solid var(--good); }
+.perks { margin: 0; padding-left: 20px; display: grid; gap: 4px; font-size: 15px; }
+.perks b { color: var(--good); }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
@@ -88,7 +90,22 @@ tr.sel td { background: var(--chip); }
   <section class="bench join" aria-labelledby="hJoin">
     <h2 id="hJoin">Join the field circle</h2>
     <p>Liked it? <b>Stay on contour!</b> Get updates when the lab posts sound-processing jobs that need careful ears and hands: measuring songs, sorting recordings, checking each other's boxes. And we're starting a community where young and seasoned field ecologists meet, trade what they know, and go out listening together.</p>
+    <ul class="perks">
+      <li><b>Natural history brainstorming:</b> bring a question from the field and think it through with people who've watched longer, or more recently, than you have.</li>
+      <li><b>Project collaboration:</b> team up on recordings, surveys and analyses.</li>
+      <li><b>Credit for your work:</b> a chance to contribute to a publication, or to spin off a project of your own.</li>
+      <li><b>Shared data:</b> recordings and measurements the circle collects, open to members.</li>
+      <li><b>Loaned audio gear:</b> borrow recorders and microphones to get started.</li>
+    </ul>
     <div class="btns"><button class="go" id="joinBtn">Stay on contour! Get updates</button><span class="eyebrow" id="joinMsg"></span></div>
+  </section>
+
+  <section class="bench" aria-labelledby="hQ">
+    <h2 id="hQ">A quick, voluntary questionnaire</h2>
+    <p class="note">Tap any answers that fit. Skip anything you like. Your answers build a list at the bottom, and nothing is sent unless you choose to submit it. No names or contact details.</p>
+    <div id="qs" style="display:grid;gap:12px"></div>
+    <div class="bench" style="background:var(--chip)"><span class="eyebrow">Your answers</span><ul id="qList" class="perks"></ul>
+      <div class="btns"><button class="go" id="qSend">Submit as my survey response</button><button id="qCopy">Copy</button><button id="qClear">Clear</button><span class="eyebrow" id="qMsg"></span></div></div>
   </section>
 
   <section class="bench" aria-labelledby="hHow">
@@ -106,7 +123,7 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const tok = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 
 // ================= links: paste these in once the Google Forms exist (see google-forms-setup.gs) =================
-const SEND_CFG = { formUrl: '', dataEntry: '', sessionEntry: '' };   // results form: prefilled with the CSV text
+const SEND_CFG = { formUrl: '', dataEntry: '', sessionEntry: '', surveyEntry: '' };   // results form: prefilled with the CSV text and the survey list
 const JOIN_URL = '';                                                   // the community sign-up form
 
 const SESSION = Math.random().toString(36).slice(2, 8).toUpperCase();
@@ -275,6 +292,32 @@ $('send').onclick = () => { const t = csvText(); if (!t) { $('dataMsg').textCont
   const u = new URL(SEND_CFG.formUrl); u.searchParams.set('usp', 'pp_url'); u.searchParams.set(SEND_CFG.dataEntry, t.slice(0, 6000)); if (SEND_CFG.sessionEntry) u.searchParams.set(SEND_CFG.sessionEntry, SESSION);
   const a = document.createElement('a'); a.href = u.toString(); a.target = '_blank'; a.rel = 'noopener'; document.body.appendChild(a); a.click(); a.remove(); $('dataMsg').textContent = 'opened the form: press Submit there'; };
 $('joinBtn').onclick = () => { if (!JOIN_URL) { $('joinMsg').textContent = 'sign-up opens soon'; return; } const a = document.createElement('a'); a.href = JOIN_URL; a.target = '_blank'; a.rel = 'noopener'; document.body.appendChild(a); a.click(); a.remove(); };
+// ================= the questionnaire: tap buttons, get a list =================
+const QS = [
+  { id: 'who', q: 'You are', multi: false, a: ['Undergraduate', 'Graduate student', 'Early-career researcher', 'Seasoned field ecologist', 'Birder or naturalist', 'Just curious'] },
+  { id: 'feel', q: 'Measuring syllables felt', multi: false, a: ['Easy', 'Just right', 'Tricky', 'Hard'] },
+  { id: 'audio', q: 'Your experience with sound recording or spectrograms', multi: false, a: ['None yet', 'A little', 'Regularly'] },
+  { id: 'interest', q: 'You\'re interested in', multi: true, a: ['Birdsong', 'Frogs and insects', 'Soundscapes and noise', 'Natural history', 'Conservation', 'Coding and analysis', 'Recording gear'] },
+  { id: 'want', q: 'From the field circle you\'d like', multi: true, a: ['Natural history brainstorming', 'Project collaboration', 'A shot at co-authoring or a spin-off project', 'Shared data', 'Loaned audio gear'] },
+  { id: 'help', q: 'You could help with', multi: true, a: ['Measuring songs', 'Field recording', 'Sorting recordings', 'Checking others\' boxes', 'Getting the Caracal recording units up and running', 'Building tools', 'Mentoring newcomers'] },
+];
+const QA = {};
+function qRender() {
+  $('qs').innerHTML = QS.map(q => `<div style="display:grid;gap:6px"><span><b>${q.q}</b>${q.multi ? ' <span class="eyebrow">(pick any)</span>' : ''}</span><div class="btns">${q.a.map((a, i) => `<button data-q="${q.id}" data-i="${i}" aria-pressed="${(QA[q.id] || []).includes(i)}">${a}</button>`).join('')}</div></div>`).join('');
+  document.querySelectorAll('#qs button').forEach(b => b.onclick = () => { const q = QS.find(x => x.id === b.dataset.q), i = +b.dataset.i, cur = QA[q.id] || [];
+    QA[q.id] = q.multi ? (cur.includes(i) ? cur.filter(x => x !== i) : [...cur, i]) : (cur.includes(i) ? [] : [i]); qRender(); });
+  const lines = QS.filter(q => (QA[q.id] || []).length).map(q => `${q.q}: ${QA[q.id].map(i => q.a[i]).join(', ')}`);
+  $('qList').innerHTML = lines.length ? lines.map(l => `<li>${l}</li>`).join('') : '<li class="note">Tap some answers above to build your list.</li>';
+  return lines;
+}
+const qText = () => { const l = qRender(); return l.length ? `visit ${SESSION}\n` + l.join('\n') : ''; };
+$('qCopy').onclick = () => { const t = qText(); if (!t) { $('qMsg').textContent = 'nothing picked yet'; return; } try { navigator.clipboard.writeText(t).then(() => { $('qMsg').textContent = 'copied'; }, () => { $('qMsg').textContent = 'copy blocked here'; }); } catch (e) { $('qMsg').textContent = 'copy blocked here'; } };
+$('qClear').onclick = () => { Object.keys(QA).forEach(k => delete QA[k]); qRender(); $('qMsg').textContent = ''; };
+$('qSend').onclick = () => { const t = qText(); if (!t) { $('qMsg').textContent = 'nothing picked yet'; return; }
+  if (!SEND_CFG.formUrl || !SEND_CFG.surveyEntry) { $('qMsg').textContent = 'submitting opens soon: for now, Copy keeps your list'; return; }
+  const u = new URL(SEND_CFG.formUrl); u.searchParams.set('usp', 'pp_url'); u.searchParams.set(SEND_CFG.surveyEntry, t); if (SEND_CFG.sessionEntry) u.searchParams.set(SEND_CFG.sessionEntry, SESSION);
+  const a = document.createElement('a'); a.href = u.toString(); a.target = '_blank'; a.rel = 'noopener'; document.body.appendChild(a); a.click(); a.remove(); $('qMsg').textContent = 'opened the form: press Submit there'; };
+qRender();
 // ================= sound =================
 let AC = null, src = null;
 function ac() { if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)(); if (AC.resume) AC.resume(); return AC; }
