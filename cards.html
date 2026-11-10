@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Syllable Studio Cards</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+<style>
+:root { --bg: #e9ece6; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #151816; color-scheme: dark; } }
+:root[data-theme="dark"] { --bg: #151816; color-scheme: dark; }
+body { margin: 0; background: var(--bg); padding: 16px max(16px, env(safe-area-inset-left, 0px)); }
+canvas { display: block; width: min(100%, 680px); height: auto; margin: 0 auto; box-shadow: 0 2px 12px rgba(0,0,0,0.25); }
+@media print { @page { size: letter; margin: 0; } body { padding: 0; background: #fff; } canvas { width: 8.5in; height: 11in; box-shadow: none; } }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+</head>
+<body>
+<canvas id="sheet" width="2550" height="3300" role="img" aria-label="A letter sheet of four quarter-page cards (4.25 by 5.5 inches), each with a QR code to Syllable Studio"></canvas>
+<script>
+(() => {
+const URL_ = 'https://songbird-soundscape.github.io/syllable-studio/';
+const c = document.getElementById('sheet'), g = c.getContext('2d'), W = c.width, H = c.height, DPI = 300;
+const CW = 4.25 * DPI, CH = 5.5 * DPI, COLS = 2, ROWS = 2, X0 = 0, Y0 = 0;
+const qr = qrcode(0, 'M'); qr.addData(URL_); qr.make(); const n = qr.getModuleCount();
+function card(x, y) {
+  const P = 0.3 * DPI, cx = x + CW / 2;                     // keep everything 0.3 in from the cut edges
+  g.fillStyle = '#f6f3ea'; g.fillRect(x, y, CW, CH);
+  g.fillStyle = '#1c7ed6'; g.fillRect(x + P, y + P, CW - 2 * P, 22);
+  g.textAlign = 'center'; g.textBaseline = 'alphabetic';
+  g.fillStyle = '#18211d'; g.font = '700 76px Silkscreen'; g.fillText('CAN YOU', cx, y + P + 130); g.fillText('MEASURE A', cx, y + P + 215);
+  g.fillStyle = '#1c7ed6'; g.fillText('BIRDSONG?', cx, y + P + 300);
+  // the little cardinal, its song, and a box around the trill
+  const s = 11, bx = x + P + 40, by = y + P + 360;
+  g.fillStyle = '#9a1e1e'; g.fillRect(bx - 2 * s, by + s, 2 * s, s); g.fillStyle = '#d42a2a'; g.fillRect(bx, by, 4 * s, 3 * s); g.fillRect(bx + 3 * s, by - s, 2 * s, 2 * s);
+  g.fillStyle = '#111'; g.fillRect(bx + 4 * s, by - s, s, s); g.fillStyle = '#e8a33c'; g.fillRect(bx + 5 * s, by, s, s);
+  g.strokeStyle = '#18211d'; g.lineWidth = 9; g.lineCap = 'round';
+  [0, 1, 2].forEach(k => { const sx = bx + 120 + k * 75; g.beginPath(); g.moveTo(sx, by - 15); g.lineTo(sx + 45, by + 40); g.stroke(); });
+  const tx = bx + 360; g.strokeStyle = '#e8590c'; g.lineWidth = 6; g.setLineDash([16, 10]); g.strokeRect(tx, by - 30, 230, 90); g.setLineDash([]);
+  g.strokeStyle = '#18211d'; g.lineWidth = 9; for (let k = 0; k < 6; k++) { g.beginPath(); g.moveTo(tx + 25 + k * 36, by - 10 + (k % 2) * 14); g.lineTo(tx + 25 + k * 36, by + 40); g.stroke(); }
+  g.fillStyle = '#e8590c'; g.font = '700 30px Silkscreen'; g.textAlign = 'left'; g.fillText('BOX IT!', tx + 245, by + 28); g.textAlign = 'center';
+  // the QR, big
+  const cell = Math.floor(640 / (n + 6)), qs = cell * (n + 6), qx = Math.round(cx - qs / 2), qy = Math.round(y + P + 450);
+  g.fillStyle = '#ffffff'; g.fillRect(qx, qy, qs, qs); g.strokeStyle = '#18211d'; g.lineWidth = 5; g.strokeRect(qx, qy, qs, qs);
+  g.fillStyle = '#18211d'; for (let r = 0; r < n; r++) for (let k = 0; k < n; k++) if (qr.isDark(r, k)) g.fillRect(qx + (k + 3) * cell, qy + (r + 3) * cell, cell, cell);
+  const b = qy + qs;
+  g.fillStyle = '#18211d'; g.font = '700 46px "Atkinson Hyperlegible", sans-serif'; g.fillText('Scan, then box each syllable.', cx, b + 75);
+  g.font = '400 36px "Atkinson Hyperlegible", sans-serif'; g.fillStyle = '#3a4a42'; g.fillText('2 minutes · phones welcome', cx, b + 125);
+  g.fillStyle = '#1c7ed6'; g.font = '700 31px "Atkinson Hyperlegible", sans-serif'; g.fillText('songbird-soundscape.github.io/syllable-studio', cx, b + 178);
+  const jy = b + 215, jh = y + CH - P - jy;
+  g.fillStyle = '#e6efe3'; g.fillRect(x + P, jy, CW - 2 * P, jh); g.fillStyle = '#2b8a3e'; g.fillRect(x + P, jy, 12, jh);
+  g.textAlign = 'left'; g.fillStyle = '#18211d'; g.font = '700 34px Silkscreen'; g.fillText('STAY ON CONTOUR!', x + P + 40, jy + 55);
+  g.font = '400 30px "Atkinson Hyperlegible", sans-serif'; g.fillText('Updates on sound-processing jobs, and', x + P + 40, jy + 102); g.fillText('field ecologists young and seasoned.', x + P + 40, jy + 142);
+  g.textAlign = 'center';
+}
+function draw() {
+  g.fillStyle = '#ffffff'; g.fillRect(0, 0, W, H);
+  for (let r = 0; r < ROWS; r++) for (let k = 0; k < COLS; k++) card(X0 + k * CW, Y0 + r * CH);
+  // cut lines: the centre of the page, both ways
+  g.strokeStyle = '#bbbbbb'; g.lineWidth = 3; g.setLineDash([10, 12]);
+  g.beginPath(); g.moveTo(W / 2, 0); g.lineTo(W / 2, H); g.moveTo(0, H / 2); g.lineTo(W, H / 2); g.stroke();
+  g.setLineDash([]);
+}
+document.fonts.ready.then(draw); draw();
+window.sheetPNG = () => c.toDataURL('image/png');
+})();
+</script>
+</body>
+</html>
