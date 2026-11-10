@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Syllable Studio</title>
+<meta name="description" content="Can you measure a birdsong? Drag a box around each syllable on a spectrogram and see how close you got.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=Atkinson+Hyperlegible:wght@400;700&family=DM+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one column, phone first. The spectrogram is the bench; controls sit right under it. */
+:root {
+  --bg: #eef1ec; --panel: #fbfcfa; --ink: #18211d; --muted: #56645d; --line: #cfd8d1; --chip: #e2e9e3;
+  --accent: #1c7ed6; --good: #2b8a3e; --warn: #c27c0e; --box: #e8590c;
+  --f-pixel: "Silkscreen", "Courier New", monospace; --f-body: "Atkinson Hyperlegible", "Segoe UI", Arial, sans-serif; --f-mono: "DM Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #111614; --panel: #18201c; --ink: #e5ece7; --muted: #94a59b; --line: #29352f; --chip: #212b26; --accent: #5aa9ff; --good: #5cc274; --warn: #f0b34a; --box: #ff8a3d; color-scheme: dark; } }
+:root[data-theme="dark"] { --bg: #111614; --panel: #18201c; --ink: #e5ece7; --muted: #94a59b; --line: #29352f; --chip: #212b26; --accent: #5aa9ff; --good: #5cc274; --warn: #f0b34a; --box: #ff8a3d; color-scheme: dark; }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 var(--f-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 16px 40px; }
+.wrap { max-width: 960px; margin: 0 auto; display: grid; gap: 14px; }
+h1 { font: 700 clamp(26px, 6vw, 40px)/1.05 var(--f-pixel); margin: 0; color: var(--accent); letter-spacing: 1px; }
+h2 { font: 700 14px/1.2 var(--f-pixel); letter-spacing: 1px; text-transform: uppercase; margin: 0; }
+p { margin: 0; }
+.lede { color: var(--muted); max-width: 70ch; }
+.bench { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: grid; gap: 10px; min-width: 0; }
+.specWrap { position: relative; border-radius: 8px; overflow: hidden; border: 1px solid var(--line); background: #ffffff; }
+#spec { display: block; width: 100%; height: 300px; touch-action: none; cursor: crosshair; }
+.btns { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+button, .file { font: 700 14px var(--f-body); color: var(--ink); background: var(--chip); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; cursor: pointer; }
+button.go { background: var(--accent); border-color: var(--accent); color: var(--panel); }
+button[aria-pressed="true"] { background: var(--ink); color: var(--panel); }
+button:disabled { opacity: 0.45; cursor: default; }
+button:focus-visible, .file:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.file input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.file { position: relative; display: inline-block; }
+.eyebrow { font: 500 11.5px/1.2 var(--f-mono); text-transform: uppercase; letter-spacing: 1.1px; color: var(--muted); }
+.note { font-size: 14px; color: var(--muted); max-width: 72ch; }
+.note b { color: var(--ink); }
+#score { font-size: 15px; }
+#score .big { font: 700 22px var(--f-body); color: var(--good); }
+.wide { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font: 13px var(--f-mono); }
+td, th { padding: 4px 6px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+th { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
+tr.sel td { background: var(--chip); }
+.labels button { font-weight: 400; padding: 6px 10px; }
+.join { border-left: 5px solid var(--good); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header style="display:grid;gap:6px">
+    <h1>Syllable Studio</h1>
+    <p class="lede">Can you measure a birdsong? Press play, then drag a box around each syllable on the spectrogram: from where it starts to where it ends, and from its lowest pitch to its highest. Then check your boxes against the answer. It takes about two minutes.</p>
+  </header>
+
+  <section class="bench" aria-labelledby="hBench">
+    <div class="btns" style="justify-content:space-between"><h2 id="hBench">The bench</h2><span class="eyebrow" id="recName"></span></div>
+    <div class="specWrap"><canvas id="spec" role="img" aria-label="Spectrogram: time runs left to right, pitch runs bottom to top; dark marks are sound. Drag to draw a box around a syllable."></canvas></div>
+    <div class="btns">
+      <button class="go" id="play">▶ Play</button>
+      <button id="playSel" disabled>▶ Play my box</button>
+      <button id="check">Check my boxes</button>
+      <button id="clear">Clear boxes</button>
+      <button id="next">Next bird</button>
+    </div>
+    <div class="btns labels" id="labelRow" hidden><span class="eyebrow">Label this box</span><span id="labels" class="btns"></span><button id="del">Delete box</button></div>
+    <div id="score" aria-live="polite"></div>
+  </section>
+
+  <section class="bench" aria-labelledby="hData">
+    <div class="btns" style="justify-content:space-between"><h2 id="hData">Your measurements</h2><span class="eyebrow" id="sessionTag"></span></div>
+    <div class="wide"><table id="table"></table></div>
+    <div class="btns"><button id="send">Send to the lab</button><button id="csv">Download as a spreadsheet (CSV)</button><button id="copy">Copy</button><span class="eyebrow" id="dataMsg"></span></div>
+    <p class="note">Nothing here identifies you: each visit gets a random code, and only your boxes and labels are kept.</p>
+  </section>
+
+  <section class="bench" aria-labelledby="hOwn">
+    <h2 id="hOwn">Measure your own recording</h2>
+    <p class="note">Load a short recording (up to 20 seconds) of a bird near you, or record one with your phone's microphone. Here there is no answer key: your boxes are the measurement.</p>
+    <div class="btns"><label class="file">Load a recording<input type="file" id="file" accept="audio/*"></label><button id="mic">🎙 Record 8 seconds</button><span class="eyebrow" id="ownMsg"></span></div>
+  </section>
+
+  <section class="bench join" aria-labelledby="hJoin">
+    <h2 id="hJoin">Join the field circle</h2>
+    <p>Liked it? Stay tuned. The lab will post sound-processing jobs that need careful ears and hands: measuring songs, sorting recordings, checking each other's boxes. And we're starting a community where young and seasoned field ecologists meet, trade what they know, and go out listening together.</p>
+    <div class="btns"><button class="go" id="joinBtn">Stay tuned and join</button><span class="eyebrow" id="joinMsg"></span></div>
+  </section>
+
+  <section class="bench" aria-labelledby="hHow">
+    <h2 id="hHow">How it works</h2>
+    <p class="note"><b>The spectrogram.</b> Time runs left to right, pitch (frequency, in kilohertz) bottom to top, and darker means louder. A whistle is a flat line, a slur is a slanted one, a trill is a row of short dashes, a buzz is a thick smudge.</p>
+    <p class="note"><b>The practice birds.</b> Their songs are built from notes, syllables and phrases the way real songbirds build theirs, and each sounds like a familiar North American bird. Because the computer made them, it knows exactly where every syllable is, so it can score your boxes: how many you found, how close your start times were, and how close your peak pitch was.</p>
+    <p class="note"><b>Why measure by hand?</b> Automatic detectors still miss quiet, overlapping and unusual songs. Careful human boxes are how those detectors are trained and checked, and measurements from many people show how much measurers agree.</p>
+  </section>
+</div>
+<script>
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const tok = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+// ================= links: paste these in once the Google Forms exist (see google-forms-setup.gs) =================
+const SEND_CFG = { formUrl: '', dataEntry: '', sessionEntry: '' };   // results form: prefilled with the CSV text
+const JOIN_URL = '';                                                   // the community sign-up form
+
+const SESSION = Math.random().toString(36).slice(2, 8).toUpperCase();
+$('sessionTag').textContent = 'visit code ' + SESSION;
+
+// ================= the practice birds (the same song rules as Two-Stroke Morning's soundscape) =================
+const LEX = { whistle: 'Whistle', slurUp: 'Slur up', slurDown: 'Slur down', whoop: 'Whoop', trill: 'Trill', warble: 'Warble', buzz: 'Buzz', chip: 'Chip', rattle: 'Rattle' };
+const BIRDS = [
+  { id: 'streak', name: 'Streak-breast', like: 'a song sparrow', song: { parts: [{ el: 'whistle', f: 3.1, d: 0.16, r: 16, x: 3 }, { el: 'buzz', f: 4.6, d: 0.35, r: 16, x: 1 }, { el: 'trill', f: 3.6, d: 0.7, r: 14, x: 1 }, { el: 'chip', f: 5.2, d: 0.05, r: 16, x: 2 }], rules: { accel: 0.25, vary: 0.3, drift: -0.2, gap: 0.06 } } },
+  { id: 'feebee', name: 'Fee-bee', like: 'a black-capped chickadee', song: { parts: [{ el: 'whistle', f: 3.9, d: 0.38, r: 16, x: 1 }, { el: 'whistle', f: 3.35, d: 0.45, r: 16, x: 1 }], rules: { accel: 0, vary: 0.15, drift: 0, gap: 0.12 } } },
+  { id: 'cheer', name: 'Cheer-cheer', like: 'a northern cardinal', song: { parts: [{ el: 'slurDown', f: 4.2, d: 0.24, r: 16, x: 3 }, { el: 'slurUp', f: 2.9, d: 0.12, r: 16, x: 5 }], rules: { accel: 0.45, vary: 0.2, drift: 0, gap: 0.05 } } },
+  { id: 'meadow', name: 'Meadow flute', like: 'a meadowlark', song: { parts: [{ el: 'slurDown', f: 3.4, d: 0.3, r: 16, x: 1 }, { el: 'slurDown', f: 2.7, d: 0.24, r: 16, x: 1 }, { el: 'warble', f: 3.6, d: 0.45, r: 16, x: 1 }, { el: 'slurDown', f: 2.5, d: 0.32, r: 16, x: 1 }], rules: { accel: 0, vary: 0.35, drift: 0, gap: 0.04 } } },
+  { id: 'redwing', name: 'Redwing', like: 'a red-winged blackbird', song: { parts: [{ el: 'chip', f: 2.4, d: 0.07, r: 16, x: 2 }, { el: 'whoop', f: 2.6, d: 0.28, r: 16, x: 1 }, { el: 'rattle', f: 3.4, d: 0.8, r: 26, x: 1 }], rules: { accel: 0, vary: 0.25, drift: 0, gap: 0.05 } } },
+  { id: 'dusk', name: 'Dusk flute', like: 'a wood thrush', song: { parts: [{ el: 'chip', f: 2.2, d: 0.05, r: 16, x: 2 }, { el: 'whistle', f: 2.5, d: 0.22, r: 16, x: 1 }, { el: 'warble', f: 3.4, d: 0.28, r: 16, x: 1 }, { el: 'trill', f: 5.6, d: 0.38, r: 34, x: 1 }], rules: { accel: 0, vary: 0.25, drift: 0, gap: 0.05 } } },
+];
+function partCurves(p, d, fmul) {
+  const N = Math.max(24, Math.ceil(d * 600)), F = new Float32Array(N), A = new Float32Array(N), f = p.f * 1000 * fmul;
+  for (let i = 0; i < N; i++) { const u = i / (N - 1), t = u * d, env = Math.pow(Math.sin(Math.PI * u), 0.4); let fr = f, a = env;
+    switch (p.el) {
+      case 'slurUp': fr = f * (0.75 + 0.5 * u); break;
+      case 'slurDown': fr = f * (1.25 - 0.5 * u); break;
+      case 'whoop': fr = f * (0.55 + 0.75 * u * u); a = env * (0.5 + 0.5 * u); break;
+      case 'trill': { const ph = (t * p.r) % 1; a = ph < 0.6 ? Math.sin(Math.PI * ph / 0.6) * Math.min(1, env * 3) : 0; fr = f * (1.08 - 0.16 * Math.min(1, ph / 0.6)); break; }
+      case 'warble': fr = f * (1 + 0.2 * Math.sin(2 * Math.PI * 9 * t + p.f) + 0.09 * Math.sin(2 * Math.PI * 14 * t)); break;
+      case 'buzz': a = env * (0.5 + 0.5 * Math.sin(2 * Math.PI * 95 * t)); break;
+      case 'chip': fr = f * (1.35 - 0.5 * u); break;
+      case 'rattle': { const ph = (t * p.r) % 1; fr = f * 0.75; a = ph < 0.45 ? env : 0.05 * env; break; }
+    }
+    F[i] = Math.max(60, fr); A[i] = Math.max(0, a); }
+  return { F, A };
+}
+function render(b) {
+  const R = b.song.rules, out = []; let t = 0; const total = b.song.parts.reduce((s, p) => s + p.x, 0); let k = 0;
+  const vary = () => 1 + R.vary * (Math.random() - 0.5) * 0.16;
+  b.song.parts.forEach(p => { for (let j = 0; j < p.x; j++, k++) {
+    const d = p.d * (1 - R.accel * (p.x > 1 ? j / (p.x - 1) : 0) * 0.6) * (1 + R.vary * (Math.random() - 0.5) * 0.2);
+    const fmul = vary() * (1 + R.drift * 0.15 * (total > 1 ? k / (total - 1) : 0));
+    out.push({ p, t, d, ...partCurves(p, d, fmul) }); t += d + R.gap * (j < p.x - 1 ? 0.5 : 1); } });
+  return { notes: out, len: t };
+}
+// synthesize the song into samples, and keep the answer key
+function synth(b) {
+  const sr = 22050, lead = 0.25, R = render(b), n = Math.ceil((R.len + lead + 0.35) * sr), buf = new Float32Array(n), truth = [];
+  const rough = { buzz: 1, rattle: 1 };
+  R.notes.forEach(note => {
+    const s0 = Math.round((lead + note.t) * sr), ns = Math.round(note.d * sr), N = note.F.length; let ph = 0, amax = 0; for (const a of note.A) amax = Math.max(amax, a);
+    for (let i = 0; i < ns && s0 + i < n; i++) { const j = Math.min(N - 1, Math.floor(i / ns * N)), f = note.F[j], a = note.A[j]; ph += 2 * Math.PI * f / sr;
+      buf[s0 + i] += a * (Math.sin(ph) + 0.12 * Math.sin(2 * ph) + (rough[note.p.el] ? 0.25 * Math.sin(3 * ph) : 0)) * 0.45; }
+    let i0 = -1, i1 = -1, lo = 1e9, hi = 0, pk = 0, pa = 0;
+    for (let j = 0; j < N; j++) if (note.A[j] > 0.15 * amax) { if (i0 < 0) i0 = j; i1 = j; lo = Math.min(lo, note.F[j]); hi = Math.max(hi, note.F[j]); if (note.A[j] > pa) { pa = note.A[j]; pk = note.F[j]; } }
+    truth.push({ t0: lead + note.t + i0 / N * note.d, t1: lead + note.t + (i1 + 1) / N * note.d, lo, hi, peak: pk, label: note.p.el });
+  });
+  let lp = 0; for (let i = 0; i < n; i++) { lp += 0.08 * ((Math.random() * 2 - 1) - lp); buf[i] += lp * 0.06; }      // a little wind
+  let mx = 0; for (const v of buf) mx = Math.max(mx, Math.abs(v)); for (let i = 0; i < n; i++) buf[i] *= 0.85 / mx;
+  return { samples: buf, sr, truth, name: `${b.name} (sounds like ${b.like})`, id: b.id };
+}
+
+// ================= spectrogram =================
+function fft(re, im) {
+  const n = re.length;
+  for (let i = 1, j = 0; i < n; i++) { let bit = n >> 1; for (; j & bit; bit >>= 1) j ^= bit; j ^= bit; if (i < j) { [re[i], re[j]] = [re[j], re[i]]; [im[i], im[j]] = [im[j], im[i]]; } }
+  for (let len = 2; len <= n; len <<= 1) { const a = -2 * Math.PI / len, wr = Math.cos(a), wi = Math.sin(a);
+    for (let i = 0; i < n; i += len) { let cr = 1, ci = 0; for (let k = 0; k < len / 2; k++) { const ur = re[i + k], ui = im[i + k], vr = re[i + k + len / 2] * cr - im[i + k + len / 2] * ci, vi = re[i + k + len / 2] * ci + im[i + k + len / 2] * cr;
+      re[i + k] = ur + vr; im[i + k] = ui + vi; re[i + k + len / 2] = ur - vr; im[i + k + len / 2] = ui - vi; const t = cr * wr - ci * wi; ci = cr * wi + ci * wr; cr = t; } } }
+}
+let REC = null;     // { samples, sr, truth?, name, id, spec, frames, bins, hop, N, fmax, dur, img }
+const FMAX = 10000;
+function analyse(rec) {
+  const N = rec.sr > 30000 ? 1024 : 512, hop = N / 4, win = new Float32Array(N); for (let i = 0; i < N; i++) win[i] = 0.5 - 0.5 * Math.cos(2 * Math.PI * i / (N - 1));
+  const fmax = Math.min(FMAX, rec.sr / 2), bins = Math.floor(fmax / (rec.sr / N)), frames = Math.max(1, Math.floor((rec.samples.length - N) / hop));
+  const spec = new Float32Array(frames * bins), re = new Float32Array(N), im = new Float32Array(N); let top = -200;
+  for (let f = 0; f < frames; f++) { for (let i = 0; i < N; i++) { re[i] = (rec.samples[f * hop + i] || 0) * win[i]; im[i] = 0; } fft(re, im);
+    for (let b = 0; b < bins; b++) { const db = 10 * Math.log10(re[b] * re[b] + im[b] * im[b] + 1e-12); spec[f * bins + b] = db; if (db > top) top = db; } }
+  const img = document.createElement('canvas'); img.width = frames; img.height = bins; const g = img.getContext('2d'), id = g.createImageData(frames, bins);
+  for (let f = 0; f < frames; f++) for (let b = 0; b < bins; b++) { const v = clamp((spec[f * bins + b] - (top - 55)) / 55, 0, 1), c = Math.round(255 * (1 - Math.pow(v, 1.2))), k = ((bins - 1 - b) * frames + f) * 4;
+    id.data[k] = c; id.data[k + 1] = c; id.data[k + 2] = Math.min(255, c + 12); id.data[k + 3] = 255; }
+  g.putImageData(id, 0, 0);
+  Object.assign(rec, { spec, frames, bins, hop, N, fmax, dur: rec.samples.length / rec.sr, img, top });
+  return rec;
+}
+// ================= drawing and boxes =================
+const cv = $('spec'), M = { l: 34, r: 8, t: 8, b: 22 };
+let BOXES = [], SEL = -1, drag = null, SHOW_TRUTH = false, playHead = null;
+function geom() { const r = cv.getBoundingClientRect(); return { w: r.width, h: r.height, pw: r.width - M.l - M.r, ph: r.height - M.t - M.b }; }
+const tx = (t, G) => M.l + t / REC.dur * G.pw, fy = (f, G) => M.t + (1 - f / REC.fmax) * G.ph;
+const xt = (x, G) => clamp((x - M.l) / G.pw, 0, 1) * REC.dur, yf = (y, G) => clamp(1 - (y - M.t) / G.ph, 0, 1) * REC.fmax;
+function draw() {
+  const d = Math.min(devicePixelRatio || 1, 2), G = geom(); if (cv.width !== Math.round(G.w * d) || cv.height !== Math.round(G.h * d)) { cv.width = Math.round(G.w * d); cv.height = Math.round(G.h * d); }
+  const g = cv.getContext('2d'); g.setTransform(d, 0, 0, d, 0, 0); g.fillStyle = '#ffffff'; g.fillRect(0, 0, G.w, G.h);
+  if (!REC) return;
+  g.imageSmoothingEnabled = true; g.drawImage(REC.img, M.l, M.t, G.pw, G.ph);
+  g.fillStyle = '#56645d'; g.font = '11px "DM Mono", monospace'; g.textAlign = 'right'; g.textBaseline = 'middle';
+  for (let k = 0; k <= REC.fmax / 1000; k += 2) { const y = fy(k * 1000, G); g.fillText(k + 'k', M.l - 4, y); g.fillStyle = 'rgba(0,0,0,0.06)'; g.fillRect(M.l, y, G.pw, 1); g.fillStyle = '#56645d'; }
+  g.textAlign = 'center'; g.textBaseline = 'top'; const span = REC.dur / Math.max(1, G.pw / 60), step = [0.1, 0.25, 0.5, 1, 2, 5].find(v => v >= span) || 5;
+  for (let t = 0; t <= REC.dur + 1e-6; t += step) g.fillText(t.toFixed(step < 1 ? 2 : 0) + 's', tx(t, G), M.t + G.ph + 4);
+  g.save(); g.translate(10, M.t + G.ph / 2); g.rotate(-Math.PI / 2); g.textAlign = 'center'; g.fillText('kHz', 0, 0); g.restore();
+  if (SHOW_TRUTH && REC.truth) { g.setLineDash([4, 3]); g.strokeStyle = '#2b8a3e'; g.lineWidth = 1.5; REC.truth.forEach(b => g.strokeRect(tx(b.t0, G), fy(b.hi, G), tx(b.t1, G) - tx(b.t0, G), fy(b.lo, G) - fy(b.hi, G))); g.setLineDash([]); }
+  const box = tok('--box') || '#e8590c';
+  BOXES.forEach((b, i) => { const x = tx(b.t0, G), y = fy(b.hi, G), w = tx(b.t1, G) - x, h = fy(b.lo, G) - y;
+    g.fillStyle = i === SEL ? 'rgba(232,89,12,0.18)' : 'rgba(232,89,12,0.08)'; g.fillRect(x, y, w, h); g.strokeStyle = '#e8590c'; g.lineWidth = i === SEL ? 2.5 : 1.5; g.strokeRect(x, y, w, h);
+    g.fillStyle = '#e8590c'; g.font = '700 11px "Atkinson Hyperlegible", sans-serif'; g.textAlign = 'left'; g.textBaseline = 'bottom'; g.fillText(`${i + 1}${b.label ? ' ' + LEX[b.label] : ''}`, x + 2, y - 1); });
+  if (drag && drag.mode === 'new') { const x = Math.min(drag.x0, drag.x1), y = Math.min(drag.y0, drag.y1); g.strokeStyle = '#e8590c'; g.setLineDash([3, 2]); g.strokeRect(x, y, Math.abs(drag.x1 - drag.x0), Math.abs(drag.y1 - drag.y0)); g.setLineDash([]); }
+  if (playHead !== null) { g.fillStyle = '#1c7ed6'; g.fillRect(tx(playHead, G), M.t, 2, G.ph); }
+}
+function peakIn(b) {   // the loudest frequency inside a box
+  let best = -1e9, bf = 0; const f0 = Math.floor(b.t0 * REC.sr / REC.hop), f1 = Math.ceil(b.t1 * REC.sr / REC.hop), bin = REC.sr / REC.N, k0 = Math.floor(b.lo / bin), k1 = Math.ceil(b.hi / bin);
+  for (let f = Math.max(0, f0); f < Math.min(REC.frames, f1); f++) for (let k = Math.max(0, k0); k < Math.min(REC.bins, k1); k++) { const v = REC.spec[f * REC.bins + k]; if (v > best) { best = v; bf = k * bin; } }
+  return bf;
+}
+function pos(e) { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
+cv.addEventListener('pointerdown', e => {
+  if (!REC) return; const p = pos(e), G = geom(); cv.setPointerCapture(e.pointerId);
+  const hit = BOXES.map((b, i) => ({ b, i })).reverse().find(({ b }) => p.x >= tx(b.t0, G) && p.x <= tx(b.t1, G) && p.y >= fy(b.hi, G) && p.y <= fy(b.lo, G));
+  if (hit) { SEL = hit.i; drag = { mode: 'move', i: hit.i, x0: p.x, y0: p.y, orig: { ...hit.b } }; }
+  else drag = { mode: 'new', x0: p.x, y0: p.y, x1: p.x, y1: p.y };
+  refresh();
+});
+cv.addEventListener('pointermove', e => { if (!drag) return; const p = pos(e), G = geom();
+  if (drag.mode === 'new') { drag.x1 = p.x; drag.y1 = p.y; }
+  else { const b = BOXES[drag.i], o = drag.orig, dt = (p.x - drag.x0) / G.pw * REC.dur, df = -(p.y - drag.y0) / G.ph * REC.fmax;
+    b.t0 = clamp(o.t0 + dt, 0, REC.dur); b.t1 = clamp(o.t1 + dt, 0, REC.dur); b.lo = clamp(o.lo + df, 0, REC.fmax); b.hi = clamp(o.hi + df, 0, REC.fmax); }
+  draw(); });
+cv.addEventListener('pointerup', () => { if (!drag) return; const G = geom();
+  if (drag.mode === 'new' && Math.abs(drag.x1 - drag.x0) > 4 && Math.abs(drag.y1 - drag.y0) > 4) {
+    const t0 = xt(Math.min(drag.x0, drag.x1), G), t1 = xt(Math.max(drag.x0, drag.x1), G), hi = yf(Math.min(drag.y0, drag.y1), G), lo = yf(Math.max(drag.y0, drag.y1), G);
+    BOXES.push({ t0, t1, lo, hi, label: '' }); SEL = BOXES.length - 1; BOXES.sort((a, b) => a.t0 - b.t0); SEL = BOXES.findIndex(b => b.t0 === t0); }
+  else if (drag.mode === 'new') SEL = -1;
+  BOXES.forEach(b => { b.peak = peakIn(b); }); drag = null; SHOW_TRUTH = false; $('score').innerHTML = ''; refresh(); });
+// ================= scoring =================
+function score() {
+  if (!REC.truth) { $('score').innerHTML = '<p class="note">Your own recording has no answer key: your boxes are the measurement.</p>'; return; }
+  const used = new Set(), matches = [];
+  REC.truth.forEach(tr => { let best = -1, bo = 0; BOXES.forEach((b, i) => { if (used.has(i)) return; const ov = Math.max(0, Math.min(b.t1, tr.t1) - Math.max(b.t0, tr.t0)), un = Math.max(b.t1, tr.t1) - Math.min(b.t0, tr.t0), fo = Math.min(b.hi, tr.hi * 1.15) - Math.max(b.lo, tr.lo * 0.85);
+    const s = un > 0 ? ov / un : 0; if (s > 0.35 && fo > 0 && s > bo) { bo = s; best = i; } }); if (best >= 0) { used.add(best); matches.push({ tr, b: BOXES[best], i: best }); BOXES[best].match = tr; } });
+  BOXES.forEach((b, i) => { if (!used.has(i)) b.match = null; });
+  const n = REC.truth.length, m = matches.length;
+  const onset = m ? matches.reduce((s, x) => s + Math.abs(x.b.t0 - x.tr.t0), 0) / m * 1000 : 0, pk = m ? matches.reduce((s, x) => s + Math.abs(x.b.peak - x.tr.peak), 0) / m : 0;
+  const lab = matches.filter(x => x.b.label === x.tr.label).length, extra = BOXES.length - m;
+  SHOW_TRUTH = true;
+  $('score').innerHTML = `<div class="big">You found ${m} of ${n} syllables</div><p class="note">Starts within <b>${Math.round(onset)} ms</b> on average; peak pitch within <b>${Math.round(pk)} Hz</b>. ${lab} of your labels match. ${extra > 0 ? `${extra} box${extra > 1 ? 'es' : ''} didn't match a syllable. ` : ''}The answer key is drawn in green dashes.${m === n && onset < 25 ? ' That is careful work.' : ''}</p>`;
+  refresh();
+}
+// ================= table, export, sending =================
+const rows = () => BOXES.map((b, i) => ({ visit: SESSION, recording: REC.id, box: i + 1, start_s: b.t0.toFixed(3), end_s: b.t1.toFixed(3), duration_ms: Math.round((b.t1 - b.t0) * 1000), low_hz: Math.round(b.lo), high_hz: Math.round(b.hi), peak_hz: Math.round(b.peak || 0), label: b.label || '',
+  matched: REC.truth ? (b.match ? 'yes' : 'no') : '', onset_err_ms: b.match ? Math.round((b.t0 - b.match.t0) * 1000) : '', peak_err_hz: b.match ? Math.round(b.peak - b.match.peak) : '' }));
+const ALL = [];   // every recording measured this visit
+function csvText() { const r = [...ALL.filter(x => x.recording !== REC.id), ...rows()]; if (!r.length) return ''; const k = Object.keys(r[0]); return [k.join(','), ...r.map(o => k.map(c => String(o[c]).replace(/,/g, ' ')).join(','))].join('\n'); }
+function refresh() {
+  const r = rows();
+  $('table').innerHTML = r.length ? `<tr><th>#</th><th>start s</th><th>length ms</th><th>low Hz</th><th>high Hz</th><th>peak Hz</th><th>label</th>${REC.truth ? '<th>found?</th>' : ''}</tr>` + r.map((o, i) => `<tr class="${i === SEL ? 'sel' : ''}"><td>${o.box}</td><td>${o.start_s}</td><td>${o.duration_ms}</td><td>${o.low_hz}</td><td>${o.high_hz}</td><td>${o.peak_hz}</td><td>${o.label ? LEX[o.label] : '…'}</td>${REC.truth ? `<td>${o.matched || ''}</td>` : ''}</tr>`).join('') : '<tr><td class="note">No boxes yet. Drag on the spectrogram to draw one.</td></tr>';
+  $('labelRow').hidden = SEL < 0; $('playSel').disabled = SEL < 0;
+  document.querySelectorAll('#labels button').forEach(b => b.setAttribute('aria-pressed', SEL >= 0 && BOXES[SEL] && BOXES[SEL].label === b.dataset.l));
+  draw();
+}
+$('labels').innerHTML = Object.entries(LEX).map(([k, v]) => `<button data-l="${k}" aria-pressed="false">${v}</button>`).join('');
+document.querySelectorAll('#labels button').forEach(b => b.onclick = () => { if (SEL < 0) return; BOXES[SEL].label = b.dataset.l; refresh(); });
+$('del').onclick = () => { if (SEL < 0) return; BOXES.splice(SEL, 1); SEL = -1; SHOW_TRUTH = false; refresh(); };
+$('clear').onclick = () => { BOXES = []; SEL = -1; SHOW_TRUTH = false; $('score').innerHTML = ''; refresh(); };
+$('check').onclick = () => { if (!BOXES.length) { $('score').innerHTML = '<p class="note">Draw at least one box first: drag across a dark mark on the spectrogram.</p>'; return; } score(); };
+$('csv').onclick = () => { const t = csvText(); if (!t) { $('dataMsg').textContent = 'no boxes yet'; return; }
+  try { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([t], { type: 'text/csv' })); a.download = `syllables-${SESSION}.csv`; document.body.appendChild(a); a.click(); a.remove(); $('dataMsg').textContent = 'downloaded'; } catch (e) { $('dataMsg').textContent = 'download blocked here: use Copy'; } };
+$('copy').onclick = () => { const t = csvText(); if (!t) { $('dataMsg').textContent = 'no boxes yet'; return; }
+  try { navigator.clipboard.writeText(t).then(() => { $('dataMsg').textContent = 'copied'; }, () => { $('dataMsg').textContent = 'copy blocked here'; }); } catch (e) { $('dataMsg').textContent = 'copy blocked here'; } };
+$('send').onclick = () => { const t = csvText(); if (!t) { $('dataMsg').textContent = 'no boxes yet'; return; }
+  if (!SEND_CFG.formUrl) { $('dataMsg').textContent = 'coming soon: for now, download or copy'; return; }
+  const u = new URL(SEND_CFG.formUrl); u.searchParams.set('usp', 'pp_url'); u.searchParams.set(SEND_CFG.dataEntry, t.slice(0, 6000)); if (SEND_CFG.sessionEntry) u.searchParams.set(SEND_CFG.sessionEntry, SESSION);
+  const a = document.createElement('a'); a.href = u.toString(); a.target = '_blank'; a.rel = 'noopener'; document.body.appendChild(a); a.click(); a.remove(); $('dataMsg').textContent = 'opened the form: press Submit there'; };
+$('joinBtn').onclick = () => { if (!JOIN_URL) { $('joinMsg').textContent = 'sign-up opens soon'; return; } const a = document.createElement('a'); a.href = JOIN_URL; a.target = '_blank'; a.rel = 'noopener'; document.body.appendChild(a); a.click(); a.remove(); };
+// ================= sound =================
+let AC = null, src = null;
+function ac() { if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)(); if (AC.resume) AC.resume(); return AC; }
+function play(t0 = 0, t1 = null) {
+  if (!REC) return; const a = ac(); if (src) { try { src.stop(); } catch (e) {} }
+  const b = a.createBuffer(1, REC.samples.length, REC.sr); b.getChannelData(0).set(REC.samples);
+  src = a.createBufferSource(); src.buffer = b; src.connect(a.destination); const start = a.currentTime + 0.02, len = (t1 ?? REC.dur) - t0; src.start(start, t0, len);
+  const tick = () => { const t = t0 + (a.currentTime - start); if (t > t0 + len || !src) { playHead = null; draw(); return; } playHead = t; draw(); requestAnimationFrame(tick); }; requestAnimationFrame(tick);
+}
+$('play').onclick = () => play();
+$('playSel').onclick = () => { if (SEL >= 0) play(Math.max(0, BOXES[SEL].t0 - 0.05), Math.min(REC.dur, BOXES[SEL].t1 + 0.05)); };
+// ================= recordings =================
+let birdI = Math.floor(Math.random() * BIRDS.length);
+function load(rec) { if (REC) ALL.push(...rows().filter(r => r.box)); REC = analyse(rec); BOXES = []; SEL = -1; SHOW_TRUTH = false; $('score').innerHTML = ''; $('recName').textContent = REC.name; refresh(); }
+$('next').onclick = () => { birdI = (birdI + 1) % BIRDS.length; load(synth(BIRDS[birdI])); };
+async function decode(arrayBuf, name) {
+  const a = ac(), ab = await a.decodeAudioData(arrayBuf); let ch = ab.getChannelData(0); const max = Math.min(ab.length, ab.sampleRate * 20);
+  if (ab.numberOfChannels > 1) { const c2 = ab.getChannelData(1); const m = new Float32Array(max); for (let i = 0; i < max; i++) m[i] = (ch[i] + c2[i]) / 2; ch = m; } else ch = ch.slice(0, max);
+  load({ samples: ch, sr: ab.sampleRate, truth: null, name, id: 'own:' + name.replace(/[^a-z0-9.\-]/gi, '_').slice(0, 40) });
+}
+$('file').onchange = async e => { const f = e.target.files[0]; if (!f) return; $('ownMsg').textContent = 'reading…';
+  try { await decode(await f.arrayBuffer(), f.name); $('ownMsg').textContent = 'loaded: scroll up to the bench'; $('hBench').scrollIntoView({ behavior: 'smooth' }); } catch (err) { $('ownMsg').textContent = 'couldn\'t read that file: try a WAV or MP3'; } };
+$('mic').onclick = async () => {
+  try { const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+    const rec = new MediaRecorder(stream), chunks = []; rec.ondataavailable = e => chunks.push(e.data);
+    rec.onstop = async () => { stream.getTracks().forEach(t => t.stop()); try { await decode(await new Blob(chunks).arrayBuffer(), 'my recording'); $('ownMsg').textContent = 'recorded: scroll up to the bench'; $('hBench').scrollIntoView({ behavior: 'smooth' }); } catch (e) { $('ownMsg').textContent = 'couldn\'t read the recording'; } };
+    rec.start(); $('ownMsg').textContent = 'recording… 8 s'; setTimeout(() => rec.stop(), 8000);
+  } catch (e) { $('ownMsg').textContent = 'the microphone isn\'t available here: try the website in your phone\'s browser'; } };
+window.addEventListener('resize', draw);
+load(synth(BIRDS[birdI]));
+document.fonts && document.fonts.ready.then(draw);
+})();
+</script>
+</body>
+</html>
